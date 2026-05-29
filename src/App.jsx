@@ -53,156 +53,7 @@ const calcUnits = (result, decimalOdds) => {
 };
 
 // ── All matches with full market data ────────────────────────────────────────
-const ALL_MATCHES = [
-  // LIVE
-  { id:"sr:71642328", status:"live", startTime:"2026-05-25T18:30:00Z",
-    tournament:"French Open Men Singles", venue:"Court Philippe-Chatrier",
-    home:{name:"Gaston, Hugo",abbr:"GAS",country:"FRA"},
-    away:{name:"Monfils, Gael",abbr:"MON",country:"FRA"},
-    setsWon:{home:2,away:1}, sets:[{h:6,a:2},{h:6,a:3},{h:3,a:6},{h:0,a:4}],
-    gameState:{homeScore:0,awayScore:0,serving:"away",lastPoint:"server_winner"},
-    stats:{home:{aces:8,dfs:3,winners:28,ufErrors:18,bpWon:"5/8",pointsWon:72,last10:5},
-           away:{aces:5,dfs:5,winners:21,ufErrors:24,bpWon:"3/9",pointsWon:63,last10:5}},
-    local_start:"11:30 AM PDT",
-    markets:{
-      ml:     { home:{dec:2.45,ml:+145}, away:{dec:1.57,ml:-175} },
-      spread: { home:{line:-3.5,dec:1.91,ml:-110}, away:{line:+3.5,dec:1.91,ml:-110} },
-      total:  { over:{line:21.5,dec:1.87,ml:-115}, under:{line:21.5,dec:1.95,ml:-105} },
-      sets:   { home:{line:-1.5,dec:1.83,ml:-120}, away:{line:+1.5,dec:1.83,ml:-120} },
-    },
-    result: null },
-  { id:"sr:71686646", status:"live", startTime:"2026-05-25T19:05:00Z",
-    tournament:"ATP Challenger Little Rock, USA Men Singles", venue:"Court 1",
-    home:{name:"Martin, Andres",abbr:"MAR",country:"COL"},
-    away:{name:"Shimizu, Yuta",abbr:"SHI",country:"JPN"},
-    setsWon:{home:0,away:1}, sets:[{h:6,a:7},{h:3,a:5}],
-    gameState:{homeScore:0,awayScore:0,serving:"home",lastPoint:null},
-    stats:null, local_start:"12:05 PM PDT",
-    markets:{
-      ml:     { home:{dec:2.10,ml:+110}, away:{dec:1.77,ml:-130} },
-      spread: { home:{line:+2.5,dec:1.91,ml:-110}, away:{line:-2.5,dec:1.91,ml:-110} },
-      total:  { over:{line:20.5,dec:1.91,ml:-110}, under:{line:20.5,dec:1.91,ml:-110} },
-      sets:   { home:{line:+1.5,dec:1.67,ml:-150}, away:{line:-1.5,dec:2.20,ml:+120} },
-    },
-    result: null },
-  { id:"sr:71686660", status:"live", startTime:"2026-05-25T19:40:00Z",
-    tournament:"ATP Challenger Little Rock, USA Men Singles", venue:"Court 2",
-    home:{name:"Ilagan, Andre",abbr:"ILA",country:"USA"},
-    away:{name:"Uchiyama, Yasutaka",abbr:"UCH",country:"JPN"},
-    setsWon:{home:0,away:1}, sets:[{h:6,a:7},{h:1,a:2}],
-    gameState:{homeScore:0,awayScore:0,serving:"home",lastPoint:null},
-    stats:null, local_start:"12:40 PM PDT",
-    markets:{
-      ml:     { home:{dec:1.83,ml:-120}, away:{dec:2.00,ml:+100} },
-      spread: { home:{line:+1.5,dec:1.77,ml:-130}, away:{line:-1.5,dec:2.10,ml:+110} },
-      total:  { over:{line:19.5,dec:1.91,ml:-110}, under:{line:19.5,dec:1.91,ml:-110} },
-      sets:   { home:{line:+1.5,dec:1.67,ml:-150}, away:{line:-1.5,dec:2.20,ml:+120} },
-    },
-    result: null },
-  // SCHEDULED
-  { id:"sr:71686642", status:"scheduled", startTime:"2026-05-25T21:20:00Z",
-    tournament:"ATP Challenger Little Rock, USA Men Singles",
-    home:{name:"Sun, Fajing",abbr:"SUN",country:"CHN"},
-    away:{name:"Bobo, Dakotah",abbr:"BOB",country:"USA"},
-    setsWon:null, sets:[], gameState:null, stats:null, local_start:"2:20 PM PDT",
-    markets:{
-      ml:     { home:{dec:2.80,ml:+180}, away:{dec:1.45,ml:-220} },
-      spread: { home:{line:+4.5,dec:1.91,ml:-110}, away:{line:-4.5,dec:1.91,ml:-110} },
-      total:  { over:{line:19.5,dec:1.91,ml:-110}, under:{line:19.5,dec:1.91,ml:-110} },
-      sets:   { home:{line:+1.5,dec:1.50,ml:-200}, away:{line:-1.5,dec:2.50,ml:+150} },
-    },
-    result: null },
-  { id:"sr:71659344", status:"scheduled", startTime:"2026-05-25T23:00:00Z",
-    tournament:"UTR PTT Gold Coast Men",
-    home:{name:"Jasika, Omar",abbr:"JAS",country:"AUS"},
-    away:{name:"Jankoski, Daniel",abbr:"JAN",country:"AUS"},
-    setsWon:null, sets:[], gameState:null, stats:null, local_start:"4:00 PM PDT",
-    markets:{
-      ml:     { home:{dec:1.71,ml:-140}, away:{dec:2.20,ml:+120} },
-      spread: { home:{line:-2.5,dec:1.91,ml:-110}, away:{line:+2.5,dec:1.91,ml:-110} },
-      total:  { over:{line:20.5,dec:1.87,ml:-115}, under:{line:20.5,dec:1.95,ml:-105} },
-      sets:   { home:{line:-1.5,dec:1.77,ml:-130}, away:{line:+1.5,dec:2.05,ml:+105} },
-    },
-    result: null },
-  { id:"sr:71659346", status:"scheduled", startTime:"2026-05-25T23:00:00Z",
-    tournament:"UTR PTT Gold Coast Men",
-    home:{name:"Loh, Brendan",abbr:"LOH",country:"AUS"},
-    away:{name:"Schoeman, Marcus",abbr:"SCH",country:"AUS"},
-    setsWon:null, sets:[], gameState:null, stats:null, local_start:"4:00 PM PDT",
-    markets:{
-      ml:     { home:{dec:2.05,ml:+105}, away:{dec:1.80,ml:-125} },
-      spread: { home:{line:+1.5,dec:1.91,ml:-110}, away:{line:-1.5,dec:1.91,ml:-110} },
-      total:  { over:{line:18.5,dec:1.91,ml:-110}, under:{line:18.5,dec:1.91,ml:-110} },
-      sets:   { home:{line:+1.5,dec:1.83,ml:-120}, away:{line:-1.5,dec:1.99,ml:-101} },
-    },
-    result: null },
-  // FINAL — with results computed from actual set scores
-  { id:"sr:71642234", status:"final", startTime:"2026-05-25T16:35:00Z",
-    tournament:"French Open Women Singles",
-    home:{name:"Urhobo, Akasha",abbr:"URH",country:"GBR"},
-    away:{name:"Boulter, Katie",abbr:"BOU",country:"GBR"},
-    setsWon:{home:1,away:2}, sets:[{h:4,a:6},{h:6,a:4},{h:4,a:6}],
-    gameState:null, stats:null, local_start:"9:35 AM PDT",
-    markets:{
-      ml:     { home:{dec:4.20,ml:+320}, away:{dec:1.24,ml:-420} },
-      spread: { home:{line:+4.5,dec:1.91,ml:-110}, away:{line:-4.5,dec:1.91,ml:-110} },
-      total:  { over:{line:20.5,dec:1.87,ml:-115}, under:{line:20.5,dec:1.95,ml:-105} },
-      sets:   { home:{line:+1.5,dec:1.50,ml:-200}, away:{line:-1.5,dec:2.50,ml:+150} },
-    },
-    result:{ winner:"away" } }, // sets: 1-2, games: 14-16 → away wins spread & sets; total=30 → over
-  { id:"sr:71642196", status:"final", startTime:"2026-05-25T18:10:00Z",
-    tournament:"French Open Women Singles",
-    home:{name:"Parks, Alycia",abbr:"PAR",country:"USA"},
-    away:{name:"Fernandez, Leylah",abbr:"FER",country:"CAN"},
-    setsWon:{home:2,away:0}, sets:[{h:6,a:4},{h:6,a:4}],
-    gameState:null, stats:null, local_start:"11:10 AM PDT",
-    markets:{
-      ml:     { home:{dec:1.63,ml:-160}, away:{dec:2.40,ml:+140} },
-      spread: { home:{line:-2.5,dec:1.91,ml:-110}, away:{line:+2.5,dec:1.91,ml:-110} },
-      total:  { over:{line:19.5,dec:1.91,ml:-110}, under:{line:19.5,dec:1.91,ml:-110} },
-      sets:   { home:{line:-1.5,dec:1.77,ml:-130}, away:{line:+1.5,dec:2.05,ml:+105} },
-    },
-    result:{ winner:"home" } }, // sets: 2-0, games: 12-8 → home wins all; total=20 → over
-  { id:"sr:71642178", status:"final", startTime:"2026-05-25T18:45:00Z",
-    tournament:"French Open Women Singles",
-    home:{name:"Zakharova, Anastasia",abbr:"ZAK",country:"RUS"},
-    away:{name:"Muchova, Karolina",abbr:"MUC",country:"CZE"},
-    setsWon:{home:0,away:2}, sets:[{h:5,a:7},{h:2,a:6}],
-    gameState:null, stats:null, local_start:"11:45 AM PDT",
-    markets:{
-      ml:     { home:{dec:3.80,ml:+280}, away:{dec:1.28,ml:-360} },
-      spread: { home:{line:+4.5,dec:1.91,ml:-110}, away:{line:-4.5,dec:1.91,ml:-110} },
-      total:  { over:{line:18.5,dec:1.87,ml:-115}, under:{line:18.5,dec:1.95,ml:-105} },
-      sets:   { home:{line:+1.5,dec:1.50,ml:-200}, away:{line:-1.5,dec:2.50,ml:+150} },
-    },
-    result:{ winner:"away" } }, // sets: 0-2, games: 7-13 → away wins all; total=20 → over
-  { id:"sr:71664960", status:"final", startTime:"2026-05-25T17:45:00Z",
-    tournament:"French Open Women Singles",
-    home:{name:"Guo, Hanyu",abbr:"GUO",country:"CHN"},
-    away:{name:"Kessler, McCartney",abbr:"KES",country:"USA"},
-    setsWon:{home:1,away:2}, sets:[{h:6,a:4},{h:6,a:7},{h:5,a:7}],
-    gameState:null, stats:null, local_start:"10:45 AM PDT",
-    markets:{
-      ml:     { home:{dec:1.77,ml:-130}, away:{dec:2.10,ml:+110} },
-      spread: { home:{line:-1.5,dec:2.10,ml:+110}, away:{line:+1.5,dec:1.77,ml:-130} },
-      total:  { over:{line:22.5,dec:1.91,ml:-110}, under:{line:22.5,dec:1.91,ml:-110} },
-      sets:   { home:{line:-1.5,dec:2.20,ml:+120}, away:{line:+1.5,dec:1.67,ml:-150} },
-    },
-    result:{ winner:"away" } }, // sets: 1-2, games: 17-18 → away wins; total=35 → over
-  { id:"sr:71642240", status:"final", startTime:"2026-05-25T18:05:00Z",
-    tournament:"French Open Women Singles",
-    home:{name:"Shnaider, Diana",abbr:"SHN",country:"RUS"},
-    away:{name:"Zarazua, Renata",abbr:"ZAR",country:"MEX"},
-    setsWon:{home:2,away:0}, sets:[{h:6,a:4},{h:6,a:1}],
-    gameState:null, stats:null, local_start:"11:05 AM PDT",
-    markets:{
-      ml:     { home:{dec:1.36,ml:-280}, away:{dec:3.30,ml:+230} },
-      spread: { home:{line:-4.5,dec:1.87,ml:-115}, away:{line:+4.5,dec:1.95,ml:-105} },
-      total:  { over:{line:17.5,dec:1.91,ml:-110}, under:{line:17.5,dec:1.91,ml:-110} },
-      sets:   { home:{line:-1.5,dec:1.40,ml:-250}, away:{line:+1.5,dec:2.80,ml:+180} },
-    },
-    result:{ winner:"home" } }, // sets: 2-0, games: 12-5 → home wins all; total=17 → under
-];
+const ALL_MATCHES = [];
 
 // ── Seed picks with all 3 market types ───────────────────────────────────────
 const SEED_PICKS = [
@@ -2102,7 +1953,7 @@ export default function App(){
       <div style={{background:"linear-gradient(180deg,#1c1c1c,#111111)",borderBottom:"2px solid #a8d828",padding:"13px 13px 0",position:"sticky",top:0,zIndex:20}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%231a1a1a' stroke='%23a8d828' stroke-width='3'/%3E%3Ccircle cx='50' cy='38' r='18' fill='none' stroke='white' stroke-width='3'/%3E%3Cline x1='35' y1='56' x2='65' y2='56' stroke='white' stroke-width='2'/%3E%3Ccircle cx='50' cy='44' r='8' fill='%23a8d828'/%3E%3Ctext x='50' y='72' text-anchor='middle' font-family='Arial Black' font-weight='900' font-size='11' fill='white'%3EBREAK%3C/text%3E%3Ctext x='50' y='84' text-anchor='middle' font-family='Arial Black' font-weight='900' font-size='11' fill='%23a8d828'%3EPOINT%3C/text%3E%3Ctext x='50' y='94' text-anchor='middle' font-family='Arial' font-size='7' fill='%23888'%3ESCORES%3C/text%3E%3C/svg%3E" alt="Break Point Scores" style={{width:44,height:44,borderRadius:"50%",objectFit:"cover",border:"2px solid #a8d828",flexShrink:0}}/>
+            <img src="/logo.png" onError={e=>{e.target.onerror=null;e.target.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%231a1a1a' stroke='%23a8d828' stroke-width='3'/%3E%3Ctext x='50' y='58' text-anchor='middle' font-family='Arial Black' font-size='18' fill='%23a8d828'%3EBP%3C/text%3E%3C/svg%3E";}} alt="Break Point Scores" style={{width:44,height:44,borderRadius:"50%",objectFit:"cover",border:"2px solid #a8d828",flexShrink:0}}/>
             <div>
               <div style={{fontSize:17,fontWeight:"bold",letterSpacing:"0.05em",color:"#1a1a1a"}}><span style={{color:"#ffffff"}}>BREAK</span> <span style={{color:"#a8d828"}}>POINT</span></div><div style={{fontSize:10,color:"#a8d828",letterSpacing:"0.2em",fontFamily:"monospace",fontWeight:"bold"}}>SCORES</div>
               <div style={{fontSize:8,color:"#6a8a3a",letterSpacing:"0.12em",fontFamily:"monospace"}}>{new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}).toUpperCase()}</div>
@@ -2237,7 +2088,18 @@ export default function App(){
                 <div style={{fontSize:9,color:"#5a7a5a",fontFamily:"monospace"}}>Click ⚙ SET NAME in the header above</div>
               </div>
             )}
-            {shown.length===0&&<div style={{textAlign:"center",color:"#8a9a8a",padding:40,fontFamily:"monospace",fontSize:11}}>{mainTab==="FAVORITES"?"No favorites yet — tap ☆":mainTab==="PICKS"?"No picks yet":"No matches"}</div>}
+            {shown.length===0&&(
+              <div style={{textAlign:"center",padding:40}}>
+                {dataLoading
+                  ? <span style={{color:"#a8d828",fontFamily:"monospace",fontSize:11}}>⚡ LOADING LIVE DATA…</span>
+                  : <span style={{color:"#aaa",fontFamily:"monospace",fontSize:11}}>
+                      {mainTab==="FAVORITES"?"No favorites yet — tap ☆":
+                       mainTab==="PICKS"?"No picks yet":
+                       "No matches available"}
+                    </span>
+                }
+              </div>
+            )}
             {Object.entries(groups).map(([tourney,matches])=>{
               const{label,tour,surface}=getTourInfo(tourney);
               const accent=TOUR_ACCENT[tour]||"#3a9ef0";
