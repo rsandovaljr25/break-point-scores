@@ -2113,7 +2113,7 @@ export default function App(){
                 <div style={{fontSize:9,color:"#5a7a5a",fontFamily:"monospace"}}>Click ⚙ SET NAME in the header above</div>
               </div>
             )}
-            {{shown.length===0&&(
+            {shown.length===0&&(
               <div style={{textAlign:"center",padding:40}}>
                 {dataLoading&&liveMatches.length===0
                   ? <span style={{color:"#a8d828",fontFamily:"monospace",fontSize:11,letterSpacing:"0.08em"}}>⚡ LOADING LIVE DATA…</span>
@@ -2122,7 +2122,7 @@ export default function App(){
                     </span>
                 }
               </div>
-            )}}
+            )}
             {Object.entries(groups).map(([tourney,matches])=>{
               const{label,tour,surface}=getTourInfo(tourney);
               const accent=TOUR_ACCENT[tour]||"#3a9ef0";
