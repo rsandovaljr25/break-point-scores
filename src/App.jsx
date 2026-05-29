@@ -1588,278 +1588,267 @@ const MATCH_DETAIL_DATA = {
 };
 
 function MatchDetailModal({ matchId, match, onClose }) {
-  const [activeSet, setActiveSet] = useState(null);
-  const [activeTab, setActiveTab] = useState("points"); // points | stats
-  const detail = MATCH_DETAIL_DATA[matchId];
-  const isLive = match.status === "live";
+  const [activeSet,  setActiveSet]  = useState(null);
+  const [activeTab,  setActiveTab]  = useState("points");
+  const [detail,     setDetail]     = useState(null);
+  const [detailLoad, setDetailLoad] = useState(true);
+  const [detailErr,  setDetailErr]  = useState(null);
 
+  const isLive  = match.status === "live";
+  const isFinal = ["final","walkover","retired","cancelled"].includes(match.status);
   const hn = splitName(match.home.name);
   const an = splitName(match.away.name);
 
-  // Set selector — default to last set
   useEffect(() => {
-    if (detail?.sets?.length) setActiveSet(detail.sets.length - 1);
+    if (!matchId) return;
+    setDetailLoad(true);
+    setDetailErr(null);
+    setDetail(null);
+
+    const load = async () => {
+      try {
+        const res  = await fetch(`/api/summary?id=${encodeURIComponent(matchId)}`);
+        const json = res.ok ? await res.json() : null;
+
+        if (!json || json.error) {
+          setDetailErr("Match stats not available for this match.");
+          return;
+        }
+
+        const se     = json.sport_event || {};
+        const status = json.sport_event_status || {};
+        const stats  = json.statistics;
+
+        // Stats
+        const hStats = stats?.totals?.competitors?.find(c=>c.qualifier==="home")?.statistics || {};
+        const aStats = stats?.totals?.competitors?.find(c=>c.qualifier==="away")?.statistics || {};
+
+        const pct = (n,d) => d>0 ? `${Math.round((n/d)*100)}%` : "—";
+
+        // Sets from period_scores
+        const periods   = status.period_scores || [];
+        const matchSets = periods
+          .filter(p=>p.type==="set")
+          .map((p,i)=>({ n:p.number||i+1, h:p.home_score||0, a:p.away_score||0, games:[] }));
+
+        const finalSets = matchSets.length > 0 ? matchSets :
+          (match.sets||[]).map((s,i)=>({ n:i+1, h:s.h, a:s.a, games:[] }));
+
+        // Duration
+        const dur = status.clock
+          ? `${Math.floor(status.clock/60)}h ${status.clock%60}m` : "";
+
+        const built = {
+          status:   match.status,
+          surface:  match.surface || "Hard",
+          venue:    se.venue?.name || match.venue || "",
+          duration: dur,
+          home: {
+            name:             match.home.name,
+            country:          match.home.country,
+            aces:             hStats.aces||0,
+            dfs:              hStats.double_faults||0,
+            firstServe:       pct(hStats.first_serve_successful||0, (hStats.first_serve_successful||0)+(hStats.second_serve_successful||0)),
+            firstServePtsWon: pct(hStats.first_serve_points_won||0, hStats.first_serve_successful||0),
+            secondServePtsWon:pct(hStats.second_serve_points_won||0, hStats.second_serve_successful||0),
+            bpWon:            `${hStats.breakpoints_won||0}/${hStats.total_breakpoints||0}`,
+            winners:          (hStats.forehand_winners||0)+(hStats.backhand_winners||0),
+            ufErrors:         (hStats.forehand_unforced_errors||0)+(hStats.backhand_unforced_errors||0),
+            totalPtsWon:      hStats.points_won||0,
+            maxStreak:        hStats.max_points_in_a_row||0,
+          },
+          away: {
+            name:             match.away.name,
+            country:          match.away.country,
+            aces:             aStats.aces||0,
+            dfs:              aStats.double_faults||0,
+            firstServe:       pct(aStats.first_serve_successful||0, (aStats.first_serve_successful||0)+(aStats.second_serve_successful||0)),
+            firstServePtsWon: pct(aStats.first_serve_points_won||0, aStats.first_serve_successful||0),
+            secondServePtsWon:pct(aStats.second_serve_points_won||0, aStats.second_serve_successful||0),
+            bpWon:            `${aStats.breakpoints_won||0}/${aStats.total_breakpoints||0}`,
+            winners:          (aStats.forehand_winners||0)+(aStats.backhand_winners||0),
+            ufErrors:         (aStats.forehand_unforced_errors||0)+(aStats.backhand_unforced_errors||0),
+            totalPtsWon:      aStats.points_won||0,
+            maxStreak:        aStats.max_points_in_a_row||0,
+          },
+          sets: finalSets,
+        };
+
+        setDetail(built);
+        if (finalSets.length > 0) setActiveSet(finalSets.length - 1);
+
+      } catch(e) {
+        console.error("Detail error:", e);
+        setDetailErr("Could not load match detail.");
+      } finally {
+        setDetailLoad(false);
+      }
+    };
+
+    load();
+    const interval = isLive ? setInterval(load, 30000) : null;
+    return () => { if (interval) clearInterval(interval); };
   }, [matchId]);
 
-  if (!detail) return (
-    <div style={{position:"fixed",inset:0,background:"#00000088",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:"#f0f0ec",border:"1px solid #c8d8a0",borderRadius:12,padding:32,textAlign:"center",color:"#4a6a4a",fontFamily:"monospace",fontSize:13}}>
-        Detailed point history not yet available for this match
-        <br/><button onClick={onClose} style={{marginTop:16,background:"#ddeeb0",border:"1px solid #4a7a10",color:"#a8d828",borderRadius:6,padding:"6px 18px",fontSize:11,fontFamily:"monospace",cursor:"pointer"}}>CLOSE</button>
-      </div>
-    </div>
-  );
-
-  const set = activeSet !== null ? detail.sets[activeSet] : null;
-  const homeWon = !isLive && match.setsWon?.home > match.setsWon?.away;
-  const awayWon = !isLive && match.setsWon?.away > match.setsWon?.home;
-
-  // Build serve % visual bar
-  const ServePct = ({ label, pct, color }) => {
-    const num = parseInt(pct);
-    return (
-      <div style={{marginBottom:6}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-          <span style={{fontSize:9,color:"#4a6a4a",fontFamily:"monospace"}}>{label}</span>
-          <span style={{fontSize:9,color:color||"#8aaaca",fontFamily:"monospace",fontWeight:"bold"}}>{pct}</span>
-        </div>
-        <div style={{height:3,background:"#ddeeb0",borderRadius:2,overflow:"hidden"}}>
-          <div style={{height:"100%",width:`${num}%`,background:color||"#a8d828",borderRadius:2,transition:"width 0.4s"}}/>
-        </div>
-      </div>
-    );
-  };
+  const set       = detail?.sets?.[activeSet] ?? null;
+  const homeWon   = !isLive && match.setsWon?.home > match.setsWon?.away;
+  const awayWon   = !isLive && match.setsWon?.away > match.setsWon?.home;
 
   return (
-    <div style={{position:"fixed",inset:0,background:"#00000099",zIndex:200,display:"flex",alignItems:"stretch",flexDirection:"column"}} onClick={onClose}>
-      <div style={{flex:1,overflowY:"auto",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"12px 8px"}} onClick={onClose}>
-        <div style={{background:"#f5f5f2",border:"1px solid #c8d8a0",borderRadius:14,width:"100%",maxWidth:560,overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
+    <div style={{position:"fixed",inset:0,background:"#00000099",zIndex:200,
+      display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div style={{background:"#ffffff",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:560,
+        maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",
+        boxShadow:"0 -4px 32px #00000033"}} onClick={e=>e.stopPropagation()}>
 
-          {/* ── HEADER ── */}
-          <div style={{background:"linear-gradient(135deg,#1a1a1a,#111111)",borderBottom:"1px solid #c8d8a0",padding:"14px 16px"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-              <div>
-                <div style={{fontSize:9,color:"#4a6a4a",fontFamily:"monospace",letterSpacing:"0.12em",marginBottom:3}}>
-                  {getTourInfo(match.tournament).label} · {detail.surface} · {detail.venue}
-                </div>
-                <div style={{fontSize:9,color:"#6a8a6a",fontFamily:"monospace"}}>
-                  ⏱ {detail.duration} · 🌡 {detail.temperature} · 💨 {detail.wind}
-                </div>
+        {/* Header */}
+        <div style={{background:"linear-gradient(135deg,#1a1a1a,#2a2a2a)",padding:"14px 16px 12px",flexShrink:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+            <div>
+              <div style={{fontSize:9,color:"#a8d828",fontFamily:"monospace",letterSpacing:"0.1em",marginBottom:2}}>
+                {getTourInfo(match.tournament).label} · {match.surface} · {match.venue}
               </div>
-              <button onClick={onClose} style={{background:"transparent",border:"1px solid #c8d8a0",color:"#4a6a4a",borderRadius:6,width:28,height:28,cursor:"pointer",fontSize:14,flexShrink:0}}>✕</button>
+              {detail?.duration&&<div style={{fontSize:9,color:"#888",fontFamily:"monospace"}}>⏱ {detail.duration}</div>}
             </div>
-
-            {/* Players + set scores */}
-            {[{player:match.home, name:hn, detail:detail.home, won:homeWon, sw:match.setsWon?.home??0},
-              {player:match.away, name:an, detail:detail.away, won:awayWon, sw:match.setsWon?.away??0}].map(({player,name,detail:pd,won,sw},pi)=>(
-              <div key={pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:pi===0?6:0}}>
-                {/* Serve indicator */}
-                <div style={{width:8}}>
-                  {isLive && match.gameState?.serving===(pi===0?"home":"away") && (
-                    <div style={{width:6,height:6,borderRadius:"50%",background:"#ffdd22"}}/>
-                  )}
-                </div>
-                <span style={{fontSize:11,lineHeight:1}}>{flagEmoji(player.country)}</span>
-                <div style={{flex:1}}>
-                  <span style={{fontSize:15,fontWeight:"bold",color:won?"#a8d828":isLive?"#e0eaf4":"#6a8a6a"}}>{name.last}</span>
-                  <span style={{fontSize:10,color:"#5a7a5a",marginLeft:6}}>{name.first}</span>
-                  {pd.seed&&<span style={{fontSize:9,color:"#5a7a3a",fontFamily:"monospace",marginLeft:4}}>[{pd.seed}]</span>}
-                </div>
-                {/* Per-set scores */}
-                <div style={{display:"flex",gap:4}}>
-                  {(match.sets||[]).map((s,si)=>{
-                    const val=pi===0?s.h:s.a; const opp=pi===0?s.a:s.h;
-                    const wonSet=val>opp;
-                    const isCurSet=si===match.sets.length-1&&isLive;
-                    const isActive=si===activeSet;
-                    return(
-                      <div key={si} onClick={()=>setActiveSet(si)} style={{
-                        width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",
-                        borderRadius:4,cursor:"pointer",
-                        background:isActive?"#2a3a05":wonSet?"#1a2a05":"transparent",
-                        border:`1px solid ${isActive?"#a8d828":wonSet?"#4a7a10":isCurSet?"#3a5a1a":"#1a2a05"}`,
-                        fontSize:13,fontFamily:"monospace",fontWeight:wonSet?"bold":"normal",
-                        color:isActive?"#a8d828":wonSet?"#88cc44":isCurSet?"#5a8a3a":"#2a4a2a",
-                        transition:"all 0.15s"}}>
-                        {val}
-                      </div>
-                    );
-                  })}
-                </div>
-                {/* Sets won */}
-                <div style={{width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",
-                  borderRadius:4,background:won?"#1a2a05":"transparent",
-                  border:`1px solid ${won?"#4a7a10":"#1a2a05"}`,
-                  fontSize:14,fontWeight:"bold",fontFamily:"monospace",color:won?"#a8d828":"#2a4a2a"}}>
-                  {sw}
-                </div>
-              </div>
-            ))}
+            <button onClick={onClose} style={{background:"transparent",border:"1px solid #444",
+              color:"#aaa",borderRadius:6,width:28,height:28,cursor:"pointer",fontSize:14,flexShrink:0}}>✕</button>
           </div>
-
-          {/* ── TABS ── */}
-          <div style={{display:"flex",borderBottom:"1px solid #d4e0a8"}}>
-            {[["points","POINT HISTORY"],["stats","MATCH STATS"]].map(([k,label])=>(
-              <button key={k} onClick={()=>setActiveTab(k)} style={{
-                flex:1,background:"transparent",border:"none",
-                borderBottom:`2px solid ${activeTab===k?"#a8d828":"transparent"}`,
-                color:activeTab===k?"#a8d828":"#3a5a3a",
-                padding:"9px",fontSize:10,fontFamily:"monospace",letterSpacing:"0.1em",cursor:"pointer"}}>
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {/* ── POINT HISTORY TAB ── */}
-          {activeTab==="points"&&set&&(
-            <div style={{padding:"10px 12px"}}>
-              {/* Set selector */}
-              <div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap"}}>
-                {detail.sets.map((s,si)=>(
-                  <button key={si} onClick={()=>setActiveSet(si)} style={{
-                    background:activeSet===si?"#1a2a05":"transparent",
-                    border:`1px solid ${activeSet===si?"#a8d828":"#1a2a05"}`,
-                    color:activeSet===si?"#a8d828":"#3a5a3a",
-                    borderRadius:4,padding:"2px 8px",fontSize:9,fontFamily:"monospace",cursor:"pointer"}}>
-                    S{s.n} {s.live?"🔴":""}({s.h}-{s.a})
-                  </button>
-                ))}
+          {[{pl:match.home,nm:hn,won:homeWon,sw:match.setsWon?.home??0},
+            {pl:match.away,nm:an,won:awayWon,sw:match.setsWon?.away??0}].map(({pl,nm,won,sw},pi)=>(
+            <div key={pi} style={{display:"flex",alignItems:"center",gap:8,marginBottom:pi===0?6:0}}>
+              <div style={{width:8}}>
+                {isLive&&match.gameState?.serving===(pi===0?"home":"away")&&
+                  <div style={{width:6,height:6,borderRadius:"50%",background:"#ffdd22"}}/>}
               </div>
-
-              {/* Player name key */}
-              <div style={{display:"flex",gap:8,marginBottom:8,fontSize:9,fontFamily:"monospace"}}>
-                <span style={{color:"#a8d828"}}>● {hn.last}</span>
-                <span style={{color:"#6a8a6a"}}>/</span>
-                <span style={{color:"#44cc88"}}>● {an.last}</span>
-                <span style={{color:"#6a8a6a",marginLeft:"auto"}}>● = server &nbsp; ⚡ = break</span>
+              <span style={{fontSize:11}}>{flagEmoji(pl.country)}</span>
+              <div style={{flex:1}}>
+                <span style={{fontSize:15,fontWeight:"bold",color:won?"#a8d828":"#e0eaf4"}}>{nm.last}</span>
+                <span style={{fontSize:10,color:"#888",marginLeft:6}}>{nm.first}</span>
               </div>
-
-              {/* Games — compact horizontal text rows */}
-              <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                {set.games.map((game,gi)=>{
-                  const isHomeServer=game.server==="home";
-                  const isLiveGame=game.live;
-                  // Build compact point sequence string e.g. "0-0 · 15-0 · 15-15 · 30-15 · 40-15 · G-15"
-                  const ptStr=game.pts.map(p=>`${p.h}-${p.a}`).join(" · ");
-                  const winnerName=game.winner==="home"?hn.last:game.winner==="away"?an.last:null;
-                  const winnerColor=game.winner==="home"?"#a8d828":"#44cc88";
+              <div style={{display:"flex",gap:4}}>
+                {(match.sets||[]).map((s,si)=>{
+                  const val=pi===0?s.h:s.a; const opp=pi===0?s.a:s.h;
+                  const wonSet=val>opp; const isActive=si===activeSet;
                   return(
-                    <div key={gi} style={{
-                      background:"#f0f0ec",
-                      border:`1px solid ${game.break?"#3a5a10":isLiveGame?"#2a5a1a":"#1a2a05"}`,
-                      borderRadius:6,padding:"5px 8px"}}>
-                      {/* Single compact header line */}
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
-                        <span style={{fontSize:9,color:"#5a7a5a",fontFamily:"monospace",minWidth:32}}>G{game.g}</span>
-                        <span style={{fontSize:8,color:"#ffdd22",fontFamily:"monospace"}}>
-                          {isHomeServer?`${hn.last} ●`:`● ${an.last}`} srv
-                        </span>
-                        <span style={{fontSize:8,color:"#6a8a6a",fontFamily:"monospace"}}>{game.score}</span>
-                        {game.break&&<span style={{fontSize:8,color:"#a8d828",fontFamily:"monospace"}}>⚡BRK</span>}
-                        {isLiveGame&&<span style={{fontSize:8,color:"#ff4444",fontFamily:"monospace"}}>🔴</span>}
-                        {winnerName&&<span style={{fontSize:8,fontFamily:"monospace",color:winnerColor,marginLeft:"auto"}}>
-                          {winnerName} wins{game.break?" (break)":""}
-                        </span>}
-                      </div>
-                      {/* Compact horizontal point sequence */}
-                      <div style={{fontSize:10,fontFamily:"monospace",color:"#3a6a3a",lineHeight:1.5,wordBreak:"break-word"}}>
-                        {game.pts.map((pt,pi2)=>{
-                          const isFinal=pi2===game.pts.length-1;
-                          const hWon=pt.h==="G"||(pi2>0&&pt.h!==game.pts[pi2-1].h);
-                          const aWon=pt.a==="G"||(pi2>0&&pt.a!==game.pts[pi2-1].a);
-                          const hColor=pt.h==="G"?"#a8d828":hWon?"#6a9a30":"#3a5a3a";
-                          const aColor=pt.a==="G"?"#44cc88":aWon?"#2a7a4a":"#2a4a3a";
-                          return(
-                            <span key={pi2}>
-                              <span style={{color:hColor,fontWeight:isFinal?"bold":"normal"}}>{pt.h}</span>
-                              <span style={{color:"#9aaa9a"}}>-</span>
-                              <span style={{color:aColor,fontWeight:isFinal?"bold":"normal"}}>{pt.a}</span>
-                              {pi2<game.pts.length-1&&<span style={{color:"#aabba0"}}> · </span>}
-                            </span>
-                          );
-                        })}
-                      </div>
+                    <div key={si} onClick={()=>setActiveSet(si)} style={{
+                      width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",
+                      borderRadius:4,cursor:"pointer",
+                      background:isActive?"#2a3a05":wonSet?"#1a2a05":"transparent",
+                      border:`1px solid ${isActive?"#a8d828":wonSet?"#4a7a10":"#444"}`,
+                      fontSize:13,fontFamily:"monospace",fontWeight:wonSet?"bold":"normal",
+                      color:isActive?"#a8d828":wonSet?"#88cc44":"#888"}}>
+                      {val}
                     </div>
                   );
                 })}
               </div>
+              <div style={{width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",
+                borderRadius:4,background:won?"#1a2a05":"transparent",
+                border:`1px solid ${won?"#4a7a10":"#444"}`,
+                fontSize:14,fontWeight:"bold",fontFamily:"monospace",color:won?"#a8d828":"#888"}}>{sw}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"flex",borderBottom:"1px solid #e0e4d8",background:"#fafaf8",flexShrink:0}}>
+          {[["points","POINT HISTORY"],["stats","MATCH STATS"]].map(([k,label])=>(
+            <button key={k} onClick={()=>setActiveTab(k)} style={{
+              flex:1,background:"transparent",border:"none",
+              borderBottom:`2px solid ${activeTab===k?"#a8d828":"transparent"}`,
+              color:activeTab===k?"#1a1a1a":"#888",
+              padding:"9px",fontSize:10,fontFamily:"monospace",letterSpacing:"0.1em",cursor:"pointer"}}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{overflowY:"auto",flex:1}}>
+          {detailLoad&&(
+            <div style={{textAlign:"center",padding:40}}>
+              <div style={{fontSize:12,color:"#a8d828",fontFamily:"monospace",letterSpacing:"0.1em"}}>⚡ LOADING…</div>
             </div>
           )}
-
-          {/* ── STATS TAB ── */}
-          {activeTab==="stats"&&(
+          {!detailLoad&&detailErr&&(
+            <div style={{textAlign:"center",padding:32}}>
+              <div style={{fontSize:12,color:"#cc3333",fontFamily:"monospace",marginBottom:8}}>{detailErr}</div>
+            </div>
+          )}
+          {!detailLoad&&!detailErr&&detail&&activeTab==="points"&&(
             <div style={{padding:"12px 14px"}}>
-              {/* Player headers */}
+              <div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap"}}>
+                {detail.sets.map((s,si)=>(
+                  <button key={si} onClick={()=>setActiveSet(si)} style={{
+                    background:activeSet===si?"#1a2a05":"transparent",
+                    border:`1px solid ${activeSet===si?"#a8d828":"#d0d0cc"}`,
+                    color:activeSet===si?"#a8d828":"#666",
+                    borderRadius:4,padding:"2px 8px",fontSize:9,fontFamily:"monospace",cursor:"pointer"}}>
+                    S{s.n} ({s.h}-{s.a})
+                  </button>
+                ))}
+              </div>
+              <div style={{textAlign:"center",padding:"20px 0",color:"#aaa",fontFamily:"monospace",fontSize:11}}>
+                <div style={{marginBottom:6}}>Point-by-point history requires Sportradar paid tier.</div>
+                <div style={{fontSize:9,color:"#ccc"}}>Switch to MATCH STATS tab for full statistics.</div>
+              </div>
+            </div>
+          )}
+          {!detailLoad&&!detailErr&&detail&&activeTab==="stats"&&(
+            <div style={{padding:"12px 14px"}}>
               <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,marginBottom:14,textAlign:"center"}}>
                 <div style={{textAlign:"left"}}>
-                  <div style={{fontSize:9,color:"#4a7a10",fontFamily:"monospace",marginBottom:1}}>{flagEmoji(match.home.country)} {match.home.country}</div>
+                  <div style={{fontSize:9,color:"#a8d828",fontFamily:"monospace",marginBottom:1}}>{flagEmoji(match.home.country)} {match.home.country}</div>
                   <div style={{fontSize:13,color:"#a8d828",fontWeight:"bold"}}>{hn.last}</div>
                 </div>
-                <div style={{fontSize:9,color:"#6a8a6a",fontFamily:"monospace",alignSelf:"center"}}>VS</div>
+                <div style={{fontSize:9,color:"#ccc",fontFamily:"monospace",alignSelf:"center"}}>VS</div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:9,color:"#2a6a4a",fontFamily:"monospace",marginBottom:1}}>{match.away.country} {flagEmoji(match.away.country)}</div>
+                  <div style={{fontSize:9,color:"#44cc88",fontFamily:"monospace",marginBottom:1}}>{match.away.country} {flagEmoji(match.away.country)}</div>
                   <div style={{fontSize:13,color:"#44cc88",fontWeight:"bold"}}>{an.last}</div>
                 </div>
               </div>
-
-              {/* Serve stats */}
-              <div style={{fontSize:9,color:"#6a8a6a",fontFamily:"monospace",letterSpacing:"0.1em",marginBottom:8}}>SERVE</div>
-              {[
-                ["Aces",       detail.home.aces,            detail.away.aces],
-                ["Double Faults", detail.home.dfs,          detail.away.dfs],
-                ["1st Serve %",   detail.home.firstServe,   detail.away.firstServe],
-                ["1st Srv Pts Won",detail.home.firstServePtsWon, detail.away.firstServePtsWon],
+              {[["SERVE",[
+                ["Aces",           detail.home.aces,            detail.away.aces],
+                ["Double Faults",  detail.home.dfs,             detail.away.dfs],
+                ["1st Serve %",    detail.home.firstServe,      detail.away.firstServe],
+                ["1st Srv Pts Won",detail.home.firstServePtsWon,detail.away.firstServePtsWon],
                 ["2nd Srv Pts Won",detail.home.secondServePtsWon,detail.away.secondServePtsWon],
-              ].map(([label,hv,av])=>{
-                const hn2=parseInt(String(hv)); const an2=parseInt(String(av));
-                const tot=hn2+an2; const hpct=tot>0?Math.round((hn2/tot)*100):50;
-                return(
-                  <div key={label} style={{marginBottom:8}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                      <span style={{fontSize:11,color:"#a8d828",fontFamily:"monospace",fontWeight:"bold"}}>{hv}</span>
-                      <span style={{fontSize:9,color:"#6a8a6a",fontFamily:"monospace"}}>{label}</span>
-                      <span style={{fontSize:11,color:"#44cc88",fontFamily:"monospace",fontWeight:"bold"}}>{av}</span>
-                    </div>
-                    <div style={{height:3,background:"#f0f0ec",borderRadius:2,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${hpct}%`,background:"linear-gradient(90deg,#a8d828,#6a9a10)",borderRadius:2}}/>
-                    </div>
-                  </div>
-                );
-              })}
-
-              <div style={{fontSize:9,color:"#6a8a6a",fontFamily:"monospace",letterSpacing:"0.1em",marginBottom:8,marginTop:12}}>RALLY</div>
-              {[
-                ["Winners",       detail.home.winners,     detail.away.winners],
-                ["Unforced Errors",detail.home.ufErrors,   detail.away.ufErrors],
-                ["Break Pts Won", detail.home.bpWon,       detail.away.bpWon],
-                ["Total Points",  detail.home.totalPtsWon, detail.away.totalPtsWon],
-                ["Max Streak",    detail.home.maxStreak,   detail.away.maxStreak],
-              ].map(([label,hv,av])=>{
-                const hn2=parseInt(String(hv)); const an2=parseInt(String(av));
-                const tot=hn2+an2; const hpct=tot>0?Math.round((hn2/tot)*100):50;
-                return(
-                  <div key={label} style={{marginBottom:8}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                      <span style={{fontSize:11,color:"#a8d828",fontFamily:"monospace",fontWeight:"bold"}}>{hv}</span>
-                      <span style={{fontSize:9,color:"#6a8a6a",fontFamily:"monospace"}}>{label}</span>
-                      <span style={{fontSize:11,color:"#44cc88",fontFamily:"monospace",fontWeight:"bold"}}>{av}</span>
-                    </div>
-                    <div style={{height:3,background:"#f0f0ec",borderRadius:2,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${hpct}%`,background:"linear-gradient(90deg,#a8d828,#6a9a10)",borderRadius:2}}/>
-                    </div>
-                  </div>
-                );
-              })}
+              ]],["RALLY",[
+                ["Winners",        detail.home.winners,         detail.away.winners],
+                ["Unforced Errors",detail.home.ufErrors,        detail.away.ufErrors],
+                ["Break Pts Won",  detail.home.bpWon,           detail.away.bpWon],
+                ["Total Points",   detail.home.totalPtsWon,     detail.away.totalPtsWon],
+                ["Max Streak",     detail.home.maxStreak,       detail.away.maxStreak],
+              ]]].map(([section,rows])=>(
+                <div key={section}>
+                  <div style={{fontSize:9,color:"#aaa",fontFamily:"monospace",letterSpacing:"0.1em",marginBottom:8,marginTop:section==="RALLY"?12:0}}>{section}</div>
+                  {rows.map(([label,hv,av])=>{
+                    const hn2=parseInt(String(hv)); const an2=parseInt(String(av));
+                    const tot=hn2+an2; const hpct=tot>0?Math.round((hn2/tot)*100):50;
+                    return(
+                      <div key={label} style={{marginBottom:8}}>
+                        <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                          <span style={{fontSize:11,color:"#a8d828",fontFamily:"monospace",fontWeight:"bold"}}>{hv}</span>
+                          <span style={{fontSize:9,color:"#aaa",fontFamily:"monospace"}}>{label}</span>
+                          <span style={{fontSize:11,color:"#44cc88",fontFamily:"monospace",fontWeight:"bold"}}>{av}</span>
+                        </div>
+                        <div style={{height:3,background:"#e8e8e4",borderRadius:2,overflow:"hidden"}}>
+                          <div style={{height:"100%",width:`${hpct}%`,background:"linear-gradient(90deg,#a8d828,#6a9a10)",borderRadius:2}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
-
         </div>
       </div>
     </div>
   );
 }
 
-// ─── FEEDBACK MODAL ───────────────────────────────────────────────────────────
+
 function FeedbackModal({onClose}){
   const [category,setCategory]=useState("general"); const [rating,setRating]=useState(0);
   const [message,setMessage]=useState(""); const [email,setEmail]=useState(""); const [status,setStatus]=useState("idle");
