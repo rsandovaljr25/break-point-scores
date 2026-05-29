@@ -1895,27 +1895,21 @@ function FeedbackModal({onClose}){
 }
 
 // ─── VISITOR TRACKER ─────────────────────────────────────────────────────────
-function useVisitorTracker(){
-  const [stats,setStats]=useState({today:0,total:0,online:1});
-  useEffect(()=>{(async()=>{try{const today=new Date().toISOString().slice(0,10);let total=1;try{const r=await window.storage.get("visitors:total",true);if(r?.value)total=parseInt(r.value)+1;}catch(e){}await window.storage.set("visitors:total",String(total),true);let tc=1;try{const r=await window.storage.get(`visitors:day:${today}`,true);if(r?.value)tc=parseInt(r.value)+1;}catch(e){}await window.storage.set(`visitors:day:${today}`,String(tc),true);setStats({today:tc,total,online:Math.min(Math.max(Math.floor(total/8)+1,1),99)});}catch(e){}})();},[]);
-  return stats;
-}
 
 // ─── APP ──────────────────────────────────────────────────────────────────────
 export default function App(){
-  // ── Live data ──────────────────────────────────────────────────────────────
   const { matches: liveMatches, oddsData: liveOdds,
           loading: dataLoading, error: dataError,
           lastUpdated, refresh } = useLiveData();
-
-  // Use live matches when available, fall back to seed ALL_MATCHES
-  const LIVE_ACTIVE = liveMatches && liveMatches.length > 0;
-  const MATCHES = LIVE_ACTIVE ? liveMatches : ALL_MATCHES;
+  const MATCHES = liveMatches.length > 0 ? liveMatches : ALL_MATCHES;
 
   const [mainTab,      setMainTab]      = useState("SCORES");
-  const [scoreTab,     setScoreTab]     = useState("LIVE");
+  const [showLiveOnly, setShowLiveOnly] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [tourFilter,   setTourFilter]   = useState("ALL");
   const [favorites,    setFavorites]    = useState(new Set());
+  const [favPlayers,   setFavPlayers]   = useState(new Set());
   const [pulse,        setPulse]        = useState(true);
   const [username,     setUsername]     = useState("");
   const [usernameInput,setUsernameInput]= useState("");
@@ -1924,19 +1918,34 @@ export default function App(){
   const [matchDetail, setMatchDetail] = useState(null);
   const [playerProfile, setPlayerProfile] = useState(null); // {name, country, tour, opponent}
 
-  const visitorStats = useVisitorTracker();
   const { myPicks, allPicks, submitPick, removePick } = usePicks(username);
 
   useEffect(()=>{ const t=setInterval(()=>setPulse(p=>!p),900); return()=>clearInterval(t); },[]);
 
   const toggleFav=id=>setFavorites(f=>{const n=new Set(f);n.has(id)?n.delete(id):n.add(id);return n;});
+  const toggleFavPlayer=name=>setFavPlayers(f=>{const n=new Set(f);n.has(name)?n.delete(name):n.add(name);return n;});
   const handleSaveUsername=()=>{ const u=usernameInput.trim(); if(!u)return; setUsername(u); setShowSettings(false); };
 
-  const TAB_STATUS={LIVE:"live",UPCOMING:"scheduled",RESULTS:"final"};
   const shown=(()=>{
-    let list=mainTab==="FAVORITES"?MATCHES.filter(m=>favorites.has(m.id)):mainTab==="PICKS"?MATCHES.filter(m=>Object.values(myPicks).some(p=>p.matchId===m.id)||m.status!=="final"):MATCHES.filter(m=>m.status===TAB_STATUS[scoreTab]);
+    let list=
+      mainTab==="FAVORITES" ? MATCHES.filter(m=>favorites.has(m.id)||favPlayers.some(p=>m.home.name===p||m.away.name===p)) :
+      mainTab==="PICKS"     ? MATCHES.filter(m=>Object.values(myPicks).some(p=>p.matchId===m.id)||m.status!=="final") :
+      showLiveOnly          ? MATCHES.filter(m=>m.status==="live") :
+      selectedDate          ? MATCHES.filter(m=>(m.startDate||m.startTime?.slice(0,10))===selectedDate) :
+      MATCHES;
     if(tourFilter!=="ALL") list=list.filter(m=>getTourInfo(m.tournament).tour===tourFilter);
-    return list.sort((a,b)=>(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9));
+    // Filter UTR
+    list = list.filter(m=>!m.tournament.includes("UTR")&&getTourInfo(m.tournament).tour!=="UTR");
+    if(tourFilter!=="ALL") list=list.filter(m=>getTourInfo(m.tournament).tour===tourFilter);
+    const LEVEL_PRI={"Grand Slam":0,"Masters 1000":1,"WTA 1000":1,"ATP 500":2,"WTA 500":2,"ATP 250":3,"WTA 250":3,"Challenger":4};
+    return list.sort((a,b)=>{
+      const sd=(STATUS_ORDER[a.status]??9)-(STATUS_ORDER[b.status]??9);
+      if(sd!==0) return sd;
+      const la=LEVEL_PRI[a.tourLevel||getTourLevel(a.tournament)]??9;
+      const lb=LEVEL_PRI[b.tourLevel||getTourLevel(b.tournament)]??9;
+      if(la!==lb) return la-lb;
+      return (a.startTime||"").localeCompare(b.startTime||"");
+    });
   })();
   const groups={};
   if(mainTab!=="LEADERBOARD"){ shown.forEach(m=>{const k=m.tournament;if(!groups[k])groups[k]=[];groups[k].push(m);}); }
@@ -2060,17 +2069,33 @@ export default function App(){
           ))}
         </div>
         {mainTab!=="LEADERBOARD"&&(
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:5,paddingBottom:2}}>
-            <div style={{display:"flex",gap:4}}>
+          <div style={{paddingTop:6,paddingBottom:4}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
               {["ALL","ATP","WTA","CH"].map(f=>(
-                <button key={f} onClick={()=>setTourFilter(f)} style={{background:tourFilter===f?"#a8d828":"transparent",border:`1px solid ${tourFilter===f?"#a8d828":"#d0d0cc"}`,color:tourFilter===f?"#1a1a1a":"#888888",borderRadius:4,padding:"2px 9px",fontSize:9,fontFamily:"monospace",cursor:"pointer"}}>{f}</button>
+                <button key={f} onClick={()=>setTourFilter(f)} style={{background:tourFilter===f?"#a8d828":"transparent",border:`1px solid ${tourFilter===f?"#a8d828":"#d0d0cc"}`,color:tourFilter===f?"#1a1a1a":"#888",borderRadius:4,padding:"2px 9px",fontSize:9,fontFamily:"monospace",cursor:"pointer",fontWeight:tourFilter===f?"bold":"normal"}}>{f}</button>
               ))}
+              {mainTab==="SCORES"&&(
+                <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}>
+                  <button onClick={()=>{setShowLiveOnly(l=>!l);setSelectedDate(null);}} style={{display:"flex",alignItems:"center",gap:4,background:showLiveOnly?"#1a1a1a":"transparent",border:`2px solid ${showLiveOnly?"#a8d828":"#d0d0cc"}`,color:showLiveOnly?"#a8d828":"#888",borderRadius:6,padding:"3px 10px",fontSize:9,fontFamily:"monospace",cursor:"pointer",fontWeight:"bold"}}>
+                    <span style={{width:6,height:6,borderRadius:"50%",background:showLiveOnly?"#a8d828":"#ccc",display:"inline-block",flexShrink:0}}/> LIVE
+                  </button>
+                  <button onClick={()=>setShowDatePicker(d=>!d)} style={{display:"flex",alignItems:"center",gap:4,background:selectedDate?"#1a2a05":"transparent",border:`1px solid ${selectedDate?"#a8d828":"#d0d0cc"}`,color:selectedDate?"#a8d828":"#888",borderRadius:6,padding:"3px 10px",fontSize:9,fontFamily:"monospace",cursor:"pointer"}}>
+                    📅 {selectedDate?new Date(selectedDate+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}):"DATE"}
+                    {selectedDate&&<span onClick={(e)=>{e.stopPropagation();setSelectedDate(null);setShowDatePicker(false);}} style={{marginLeft:4,color:"#cc3333",fontWeight:"bold"}}>✕</span>}
+                  </button>
+                </div>
+              )}
             </div>
-            {mainTab==="SCORES"&&(
-              <div style={{display:"flex"}}>
-                {["LIVE","UPCOMING","RESULTS"].map(t=>(
-                  <button key={t} onClick={()=>setScoreTab(t)} style={{background:"transparent",border:"none",borderBottom:`2px solid ${scoreTab===t?"#a8d828":"transparent"}`,color:scoreTab===t?"#ffffff":"#aaaaaa",padding:"3px 8px",fontSize:9,fontFamily:"monospace",cursor:"pointer"}}>{t}</button>
-                ))}
+            {showDatePicker&&mainTab==="SCORES"&&(
+              <div style={{marginTop:6,background:"#ffffff",border:"2px solid #a8d828",borderRadius:10,padding:10,boxShadow:"0 4px 16px #00000018"}}>
+                <div style={{fontSize:9,color:"#888",fontFamily:"monospace",marginBottom:6}}>SELECT DATE</div>
+                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
+                  {(()=>{const dates=[];for(let i=-7;i<=7;i++){const d=new Date();d.setDate(d.getDate()+i);const iso=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString().slice(0,10);const label=i===-1?"Yesterday":i===0?"Today":i===1?"Tomorrow":d.toLocaleDateString("en-US",{month:"short",day:"numeric"});dates.push({iso,label,isPast:i<0,isToday:i===0});}return dates.map(({iso,label,isToday,isPast})=>(<button key={iso} onClick={()=>{setSelectedDate(iso);setShowDatePicker(false);setShowLiveOnly(false);}} style={{background:selectedDate===iso?"#a8d828":isToday?"#f0f8e8":"#f5f5f2",border:`1px solid ${selectedDate===iso?"#a8d828":isToday?"#c8e070":"#e0e0dc"}`,color:selectedDate===iso?"#1a1a1a":isToday?"#2a6a2a":isPast?"#666":"#1a1a1a",borderRadius:6,padding:"4px 10px",fontSize:10,fontFamily:"monospace",cursor:"pointer",fontWeight:isToday||selectedDate===iso?"bold":"normal"}}>{label}</button>));})()}
+                </div>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  <span style={{fontSize:9,color:"#888",fontFamily:"monospace"}}>Or pick:</span>
+                  <input type="date" value={selectedDate||""} onChange={e=>{setSelectedDate(e.target.value);setShowDatePicker(false);setShowLiveOnly(false);}} style={{flex:1,background:"#f5f5f2",border:"1px solid #d0d0cc",borderRadius:6,padding:"4px 8px",fontSize:11,fontFamily:"monospace",outline:"none",color:"#1a1a1a"}}/>
+                </div>
               </div>
             )}
           </div>
@@ -2088,18 +2113,16 @@ export default function App(){
                 <div style={{fontSize:9,color:"#5a7a5a",fontFamily:"monospace"}}>Click ⚙ SET NAME in the header above</div>
               </div>
             )}
-            {shown.length===0&&(
+            {{shown.length===0&&(
               <div style={{textAlign:"center",padding:40}}>
-                {dataLoading
-                  ? <span style={{color:"#a8d828",fontFamily:"monospace",fontSize:11}}>⚡ LOADING LIVE DATA…</span>
+                {dataLoading&&liveMatches.length===0
+                  ? <span style={{color:"#a8d828",fontFamily:"monospace",fontSize:11,letterSpacing:"0.08em"}}>⚡ LOADING LIVE DATA…</span>
                   : <span style={{color:"#aaa",fontFamily:"monospace",fontSize:11}}>
-                      {mainTab==="FAVORITES"?"No favorites yet — tap ☆":
-                       mainTab==="PICKS"?"No picks yet":
-                       "No matches available"}
+                      {mainTab==="FAVORITES"?"No favorites yet — tap ☆":mainTab==="PICKS"?"No picks yet":selectedDate?"No matches found for this date":"No matches available"}
                     </span>
                 }
               </div>
-            )}
+            )}}
             {Object.entries(groups).map(([tourney,matches])=>{
               const{label,tour,surface}=getTourInfo(tourney);
               const accent=TOUR_ACCENT[tour]||"#3a9ef0";
@@ -2138,24 +2161,13 @@ export default function App(){
         )}
       </div>
 
-      {/* LIVE DATA STATUS */}
-      {dataLoading&&MATCHES===ALL_MATCHES&&<div style={{background:"#eef6e0",borderTop:"1px solid #c8e070",padding:"4px 14px"}}><span style={{fontSize:9,color:"#5a8a2a",fontFamily:"monospace"}}>⚡ LOADING LIVE DATA…</span></div>}
-      {dataError&&<div style={{background:"#fceaec",padding:"4px 14px",display:"flex",justifyContent:"space-between"}}><span style={{fontSize:9,color:"#cc3333",fontFamily:"monospace"}}>⚠ Using cached data</span><button onClick={refresh} style={{fontSize:9,color:"#cc3333",background:"transparent",border:"1px solid #f0a0a0",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontFamily:"monospace"}}>RETRY</button></div>}
       {/* VISITOR BAR */}
-      <div style={{display:"flex",gap:10,alignItems:"center",background:"#ebebeb",borderTop:"1px solid #c8d8a0",padding:"4px 13px",flexWrap:"wrap"}}>
-        {[["👥","TODAY",visitorStats.today],["📊","TOTAL",visitorStats.total],["🟢","ONLINE",visitorStats.online]].map(([icon,label,val])=>(
-          <div key={label} style={{display:"flex",alignItems:"center",gap:4}}>
-            <span style={{fontSize:10}}>{icon}</span>
-            <span style={{fontSize:8,color:"#5a7a5a",fontFamily:"monospace",letterSpacing:"0.06em"}}>{label}</span>
-            <span style={{fontSize:10,color:"#a8d828",fontFamily:"monospace",fontWeight:"bold"}}>{val?.toLocaleString()}</span>
-          </div>
-        ))}
-        <div style={{marginLeft:"auto",fontSize:8,color:"#8a9a8a",fontFamily:"monospace"}}>{new Date().toLocaleString()}</div>
-      </div>
 
+      {dataLoading&&liveMatches.length===0&&<div style={{background:"#eef6e0",borderTop:"1px solid #c8e070",padding:"4px 14px"}}><span style={{fontSize:9,color:"#5a8a2a",fontFamily:"monospace"}}>⚡ LOADING LIVE DATA…</span></div>}
+      {dataError&&<div style={{background:"#fceaec",padding:"4px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:9,color:"#cc3333",fontFamily:"monospace"}}>⚠ Using cached data</span><button onClick={refresh} style={{fontSize:9,color:"#cc3333",background:"transparent",border:"1px solid #f0a0a0",borderRadius:4,padding:"1px 8px",cursor:"pointer",fontFamily:"monospace"}}>RETRY</button></div>}
       {/* FOOTER */}
       <div style={{textAlign:"center",padding:"5px 13px",color:"#9aaa9a",fontSize:8,fontFamily:"monospace",borderTop:"1px solid #d0d8c0"}}>
-        © 2026 BREAK POINT SCORES · SPORTRADAR · THE-ODDS-API · FOR ENTERTAINMENT ONLY{lastUpdated&&<span> · {lastUpdated.toLocaleTimeString()}</span>}
+        © 2026 BREAK POINT SCORES · SCORES: SPORTRADAR · ODDS: THE-ODDS-API.COM · FOR ENTERTAINMENT ONLY
       </div>
 
       {showFeedback&&<FeedbackModal onClose={()=>setShowFeedback(false)}/>}
